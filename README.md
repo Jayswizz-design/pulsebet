@@ -1,6 +1,6 @@
 # PulseBet
 
-PulseBet is a React + Node.js sports betting interface with:
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Jayswizz-design/pulsebet)`r`n`r`nPulseBet is a React + Node.js sports betting interface with:
 - Tailwind CSS frontend
 - React Router pages for sportsbook, login, register, and virtual games
 - MongoDB persistence with Mongoose
@@ -128,3 +128,4 @@ git push -u origin main
 - If TheSportsDB live feed is unavailable, the app falls back to seeded local fixtures.
 - `server/data/users.json` is ignored and no longer used for auth persistence.
 - Vercel, Render, and GitHub CLI deployment still require your own authenticated account/session on this machine.
+

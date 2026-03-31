@@ -19,12 +19,24 @@ const port = process.env.PORT || 4000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const clientDistPath = path.resolve(__dirname, "../../client/dist");
+let databaseReady = false;
 
 app.use(cors());
 app.use(express.json());
 
+function ensureDatabase(res) {
+  if (databaseReady) {
+    return true;
+  }
+
+  res.status(503).json({
+    message: "Database is not available yet. Public sportsbook feeds still work."
+  });
+  return false;
+}
+
 app.get("/api/health", (_req, res) => {
-  res.json({ status: "ok" });
+  res.json({ status: "ok", databaseReady });
 });
 
 app.get("/api/live-center", async (_req, res) => {
@@ -54,6 +66,10 @@ app.get("/api/virtual-games", (_req, res) => {
 });
 
 app.post("/api/auth/register", async (req, res) => {
+  if (!ensureDatabase(res)) {
+    return;
+  }
+
   const { name, email, password } = req.body || {};
 
   if (!name || !email || !password) {
@@ -61,21 +77,29 @@ app.post("/api/auth/register", async (req, res) => {
     return;
   }
 
-  const result = await registerUser({ name, email, password });
+  try {
+    const result = await registerUser({ name, email, password });
 
-  if (result.error) {
-    res.status(409).json({ message: result.error });
-    return;
+    if (result.error) {
+      res.status(409).json({ message: result.error });
+      return;
+    }
+
+    res.status(201).json({
+      user: result.user,
+      token: result.token,
+      message: "Registration successful."
+    });
+  } catch (_error) {
+    res.status(500).json({ message: "Unable to register right now." });
   }
-
-  res.status(201).json({
-    user: result.user,
-    token: result.token,
-    message: "Registration successful."
-  });
 });
 
 app.post("/api/auth/login", async (req, res) => {
+  if (!ensureDatabase(res)) {
+    return;
+  }
+
   const { email, password } = req.body || {};
 
   if (!email || !password) {
@@ -83,49 +107,66 @@ app.post("/api/auth/login", async (req, res) => {
     return;
   }
 
-  const result = await loginUser({ email, password });
+  try {
+    const result = await loginUser({ email, password });
 
-  if (result.error) {
-    res.status(401).json({ message: result.error });
-    return;
+    if (result.error) {
+      res.status(401).json({ message: result.error });
+      return;
+    }
+
+    res.json({ user: result.user, token: result.token });
+  } catch (_error) {
+    res.status(500).json({ message: "Unable to log in right now." });
   }
-
-  res.json({ user: result.user, token: result.token });
 });
 
 app.get("/api/auth/me", requireAuth, async (req, res) => {
-  const user = await getUserById(req.auth.sub);
-  if (!user) {
-    res.status(404).json({ message: "User not found." });
-    return;
-  }
-
-  res.json({ user });
-});
-
-app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
-  const { amount } = req.body || {};
-  const user = await getUserById(req.auth.sub);
-  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
-
-  if (!user) {
-    res.status(404).json({ message: "User not found." });
-    return;
-  }
-
-  if (!paystackSecret) {
-    res.status(503).json({
-      message: "PAYSTACK_SECRET_KEY is not configured on the server."
-    });
-    return;
-  }
-
-  if (!amount) {
-    res.status(400).json({ message: "Amount is required." });
+  if (!ensureDatabase(res)) {
     return;
   }
 
   try {
+    const user = await getUserById(req.auth.sub);
+    if (!user) {
+      res.status(404).json({ message: "User not found." });
+      return;
+    }
+
+    res.json({ user });
+  } catch (_error) {
+    res.status(500).json({ message: "Unable to load user profile." });
+  }
+});
+
+app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
+  if (!ensureDatabase(res)) {
+    return;
+  }
+
+  const { amount } = req.body || {};
+  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+
+  try {
+    const user = await getUserById(req.auth.sub);
+
+    if (!user) {
+      res.status(404).json({ message: "User not found." });
+      return;
+    }
+
+    if (!paystackSecret) {
+      res.status(503).json({
+        message: "PAYSTACK_SECRET_KEY is not configured on the server."
+      });
+      return;
+    }
+
+    if (!amount) {
+      res.status(400).json({ message: "Amount is required." });
+      return;
+    }
+
     const response = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
@@ -173,13 +214,17 @@ app.get("*", (req, res, next) => {
   res.sendFile(path.join(clientDistPath, "index.html"));
 });
 
+app.listen(port, () => {
+  console.log(`API listening on http://localhost:${port}`);
+});
+
 connectToDatabase()
   .then(() => {
-    app.listen(port, () => {
-      console.log(`API listening on http://localhost:${port}`);
-    });
+    databaseReady = true;
+    console.log("MongoDB connected");
   })
   .catch((error) => {
-    console.error("Failed to connect to MongoDB", error.message);
-    process.exit(1);
+    databaseReady = false;
+    console.error("MongoDB unavailable, continuing with public feed routes only:", error.message);
   });
+

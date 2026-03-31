@@ -20,6 +20,15 @@ const promoAccentClass = {
   ember: "from-orange-400/25"
 };
 
+const nairaFormatter = new Intl.NumberFormat("en-NG", {
+  style: "currency",
+  currency: "NGN",
+  maximumFractionDigits: 0
+});
+
+function formatNaira(value) {
+  return nairaFormatter.format(Number(value) || 0);
+}
 function App() {
   const [betSlip, setBetSlip] = useState([]);
   const [sports, setSports] = useState([]);
@@ -194,6 +203,7 @@ function Header({ user, onLogout }) {
 
 function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, token }) {
   const [livePayload, setLivePayload] = useState(null);
+  const [liveError, setLiveError] = useState("");
   const [featuredBets, setFeaturedBets] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedSport, setSelectedSport] = useState("all");
@@ -202,6 +212,7 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
 
   useEffect(() => {
     async function loadPage() {
+      setLiveError("");
       const [liveRes, featuredRes, statsRes] = await Promise.all([
         fetch(`${apiBase}/api/live-center`),
         fetch(`${apiBase}/api/featured-bets`),
@@ -219,7 +230,11 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
       setStats(statsJson);
     }
 
-    loadPage().catch((error) => console.error("Failed to load sportsbook page", error));
+    loadPage().catch((error) => {
+      console.error("Failed to load sportsbook page", error);
+      setLivePayload({ fixtures: [], source: "Feed unavailable", live: false, lastUpdated: null });
+      setLiveError("Unable to load live feed right now.");
+    });
   }, []);
 
   const fixtures = livePayload?.fixtures || [];
@@ -229,7 +244,7 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
     : fixtures.filter((fixture) => fixture.sport?.toLowerCase() === selectedSport.toLowerCase())).slice(0, 8);
 
   const totalOdds = betSlip.reduce((total, pick) => total * pick.price, 1);
-  const stake = 25;
+  const stake = 2500;
   const estimatedReturn = betSlip.length ? (totalOdds * stake).toFixed(2) : "0.00";
 
   async function handleDeposit() {
@@ -312,7 +327,7 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
               <span className="rounded-full border border-lime-300/25 bg-lime-300/10 px-3 py-1 text-xs uppercase tracking-[0.22em] text-lime-300">
                 {livePayload?.live ? "Live Source" : "Fallback Feed"}
               </span>
-              <span className="text-xs text-slate-400">{livePayload?.source || "Loading"}</span>
+              <span className="text-xs text-slate-400">{livePayload ? livePayload.source : "Loading"}</span>
             </div>
             {featuredFixture ? (
               <>
@@ -351,7 +366,7 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
               <p className="text-xs uppercase tracking-[0.24em] text-lime-300">Top markets</p>
               <h2 className="mt-2 font-display text-3xl font-bold">Live and upcoming fixtures</h2>
               <p className="mt-2 text-sm leading-6 text-slate-400">
-                Source: {livePayload?.source || "Loading"}. Last updated: {livePayload?.lastUpdated ? new Date(livePayload.lastUpdated).toLocaleString() : "..."}
+                Source: {livePayload ? livePayload.source : "Loading"}. Last updated: {livePayload?.lastUpdated ? new Date(livePayload.lastUpdated).toLocaleString() : "..."}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -398,7 +413,7 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
                 </div>
               </article>
             ))}
-            {marketFixtures.length === 0 ? <div className="rounded-[24px] border border-dashed border-white/12 bg-white/[0.03] p-8 text-center text-slate-400">No live fixtures match this sport yet.</div> : null}
+            {marketFixtures.length === 0 ? <div className="rounded-[24px] border border-dashed border-white/12 bg-white/[0.03] p-8 text-center text-slate-400">{liveError || "No live fixtures match this sport yet."}</div> : null}
           </div>
         </section>
 
@@ -451,9 +466,9 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
           )}
 
           <div className="grid gap-3 border-t border-white/10 pt-4 text-sm sm:grid-cols-3 xl:grid-cols-1">
-            <SummaryRow label="Stake" value={`$${stake}`} />
+            <SummaryRow label="Stake" value={formatNaira(stake)} />
             <SummaryRow label="Total Odds" value={betSlip.length ? totalOdds.toFixed(2) : "0.00"} />
-            <SummaryRow label="Potential Return" value={`$${estimatedReturn}`} />
+            <SummaryRow label="Potential Return" value={formatNaira(estimatedReturn)} />
           </div>
 
           <button type="button" className="mt-5 w-full rounded-full bg-[linear-gradient(135deg,#c9ff4d,#ebfdb1)] px-4 py-3 font-semibold text-slate-950 transition hover:-translate-y-0.5">
@@ -463,14 +478,14 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
 
         <section className="panel-card p-5">
           <p className="text-xs uppercase tracking-[0.24em] text-lime-300">Wallet Deposit</p>
-          <h2 className="mt-2 font-display text-2xl font-bold">Fund with Paystack</h2>
-          <p className="mt-3 text-sm leading-6 text-slate-400">{user ? `Signed in as ${user.email}. Deposits are initialized through a JWT-protected backend route.` : "Log in to initialize a secure Paystack deposit from your wallet panel."}</p>
+          <h2 className="mt-2 font-display text-2xl font-bold">Fund with Paystack (NGN)</h2>
+          <p className="mt-3 text-sm leading-6 text-slate-400">{user ? `Signed in as ${user.email}. Deposits are initialized in Nigerian naira through a JWT-protected backend route.` : "Log in to initialize a secure Paystack deposit from your wallet panel."}</p>
           <label className="mt-5 block text-sm text-slate-300">
-            Deposit amount
+            Deposit amount \(NGN\)
             <input type="number" min="100" value={depositAmount} onChange={(event) => setDepositAmount(event.target.value)} className="mt-2 w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-lime-300/35" />
           </label>
           <button type="button" onClick={handleDeposit} className="mt-4 w-full rounded-full border border-white/12 bg-white/5 px-4 py-3 font-medium text-slate-100 transition hover:border-white/25 hover:bg-white/10">
-            Deposit via Paystack
+            Deposit in naira via Paystack
           </button>
           {depositMessage ? <p className="mt-3 text-sm text-amber-200">{depositMessage}</p> : null}
         </section>
@@ -668,3 +683,7 @@ function SummaryRow({ label, value }) {
 }
 
 export default App;
+
+
+
+

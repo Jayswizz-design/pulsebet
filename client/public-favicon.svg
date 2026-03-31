@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="pulsebet" x1="8" y1="8" x2="56" y2="56" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#C9FF4D"/>
+      <stop offset="1" stop-color="#71DEFC"/>
+    </linearGradient>
+  </defs>
+  <rect x="6" y="6" width="52" height="52" rx="16" fill="#07111D"/>
+  <rect x="10" y="10" width="44" height="44" rx="14" fill="url(#pulsebet)"/>
+  <path d="M24 19H34.5C40.8513 19 46 24.1487 46 30.5C46 36.8513 40.8513 42 34.5 42H24V19Z" fill="#07111D"/>
+  <path d="M29 24H34.5C38.0899 24 41 26.9101 41 30.5C41 34.0899 38.0899 37 34.5 37H29V24Z" fill="#C9FF4D"/>
+  <path d="M24 42V19H33.5C39.299 19 44 23.701 44 29.5C44 35.299 39.299 40 33.5 40H24" stroke="#07111D" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
