@@ -333,6 +333,13 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
               <>
                 <p className="mt-5 text-xs uppercase tracking-[0.2em] text-slate-400">{featuredFixture.league}</p>
                 <h3 className="mt-2 font-display text-2xl font-bold">{featuredFixture.match}</h3>
+                {featuredFixture.liveScore ? (
+                  <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+                    <span className="text-sm text-slate-300">{featuredFixture.homeTeam}</span>
+                    <span className="font-display text-2xl font-bold text-lime-300">{featuredFixture.liveScore.home} - {featuredFixture.liveScore.away}</span>
+                    <span className="text-sm text-slate-300">{featuredFixture.awayTeam}</span>
+                  </div>
+                ) : null}
                 <p className="mt-2 text-sm text-slate-300">{featuredFixture.kickoff} · {featuredFixture.status}</p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   {Object.entries(featuredFixture.odds).slice(0, 3).map(([label, price]) => (
@@ -391,6 +398,13 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
                       <span>{fixture.status}</span>
                     </div>
                     <h3 className="mt-3 font-display text-2xl font-bold">{fixture.match}</h3>
+                    {fixture.liveScore ? (
+                      <div className="mt-3 flex items-center gap-3 text-sm text-slate-200">
+                        <span>{fixture.homeTeam}</span>
+                        <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1 font-display text-lg font-bold text-lime-300">{fixture.liveScore.home} - {fixture.liveScore.away}</span>
+                        <span>{fixture.awayTeam}</span>
+                      </div>
+                    ) : null}
                     <p className="mt-1 text-sm text-slate-300">{fixture.market}</p>
                   </div>
                   <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-lime-300">
@@ -683,6 +697,8 @@ function SummaryRow({ label, value }) {
 }
 
 export default App;
+
+
 
 
 
