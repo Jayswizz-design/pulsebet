@@ -205,7 +205,7 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
   const [livePayload, setLivePayload] = useState(null);
   const [liveError, setLiveError] = useState("");
   const [featuredBets, setFeaturedBets] = useState([]);
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(null);`r`n  const [matchCenter, setMatchCenter] = useState(null);
   const [selectedSport, setSelectedSport] = useState("all");
   const [depositAmount, setDepositAmount] = useState(5000);
   const [depositMessage, setDepositMessage] = useState("");
@@ -213,13 +213,13 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
   useEffect(() => {
     async function loadPage() {
       setLiveError("");
-      const [liveRes, featuredRes, statsRes] = await Promise.all([
+      const [liveRes, featuredRes, statsRes, matchCenterRes] = await Promise.all([
         fetch(`${apiBase}/api/live-center`),
         fetch(`${apiBase}/api/featured-bets`),
         fetch(`${apiBase}/api/stats`)
       ]);
 
-      const [liveJson, featuredJson, statsJson] = await Promise.all([
+      const [liveJson, featuredJson, statsJson, matchCenterJson] = await Promise.all([
         liveRes.json(),
         featuredRes.json(),
         statsRes.json()
@@ -227,7 +227,7 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
 
       setLivePayload(liveJson);
       setFeaturedBets(featuredJson);
-      setStats(statsJson);
+      setStats(statsJson);`r`n      setMatchCenter(matchCenterJson);
     }
 
     loadPage().catch((error) => {
@@ -332,14 +332,17 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
             {featuredFixture ? (
               <>
                 <p className="mt-5 text-xs uppercase tracking-[0.2em] text-slate-400">{featuredFixture.league}</p>
-                <h3 className="mt-2 font-display text-2xl font-bold">{featuredFixture.match}</h3>
-                {featuredFixture.liveScore ? (
-                  <div className="mt-3 flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
-                    <span className="text-sm text-slate-300">{featuredFixture.homeTeam}</span>
-                    <span className="font-display text-2xl font-bold text-lime-300">{featuredFixture.liveScore.home} - {featuredFixture.liveScore.away}</span>
-                    <span className="text-sm text-slate-300">{featuredFixture.awayTeam}</span>
-                  </div>
-                ) : null}
+                <div className="mt-3 flex items-center justify-between gap-4 rounded-[24px] border border-white/10 bg-white/5 px-4 py-4">
+                  <TeamIdentity name={featuredFixture.homeTeam} logo={featuredFixture.homeLogo} align="left" />
+                  {featuredFixture.liveScore ? (
+                    <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-4 py-2 font-display text-2xl font-bold text-lime-300">
+                      {featuredFixture.liveScore.home} - {featuredFixture.liveScore.away}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-white/10 bg-slate-950/70 px-4 py-2 text-xs uppercase tracking-[0.2em] text-slate-300">vs</span>
+                  )}
+                  <TeamIdentity name={featuredFixture.awayTeam} logo={featuredFixture.awayLogo} align="right" />
+                </div>
                 <p className="mt-2 text-sm text-slate-300">{featuredFixture.kickoff} · {featuredFixture.status}</p>
                 <div className="mt-5 grid gap-3 sm:grid-cols-3">
                   {Object.entries(featuredFixture.odds).slice(0, 3).map(([label, price]) => (
@@ -397,15 +400,16 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
                       <span className="text-slate-600">•</span>
                       <span>{fixture.status}</span>
                     </div>
-                    <h3 className="mt-3 font-display text-2xl font-bold">{fixture.match}</h3>
-                    {fixture.liveScore ? (
-                      <div className="mt-3 flex items-center gap-3 text-sm text-slate-200">
-                        <span>{fixture.homeTeam}</span>
+                    <div className="mt-3 flex items-center justify-between gap-4 rounded-[22px] border border-white/10 bg-slate-950/45 px-4 py-4">
+                      <TeamIdentity name={fixture.homeTeam} logo={fixture.homeLogo} align="left" compact />
+                      {fixture.liveScore ? (
                         <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1 font-display text-lg font-bold text-lime-300">{fixture.liveScore.home} - {fixture.liveScore.away}</span>
-                        <span>{fixture.awayTeam}</span>
-                      </div>
-                    ) : null}
-                    <p className="mt-1 text-sm text-slate-300">{fixture.market}</p>
+                      ) : (
+                        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-300">vs</span>
+                      )}
+                      <TeamIdentity name={fixture.awayTeam} logo={fixture.awayLogo} align="right" compact />
+                    </div>
+                    <p className="mt-3 text-sm text-slate-300">{fixture.market}</p>
                   </div>
                   <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-3 py-1 text-xs uppercase tracking-[0.18em] text-lime-300">
                     {fixture.boost}
@@ -505,6 +509,115 @@ function SportsbookPage({ sports, betSlip, onAddToSlip, onRemoveFromSlip, user, 
         </section>
       </aside>
     </main>
+  );
+}
+
+function MatchCenterPanel({ matchCenter }) {
+  const fixture = matchCenter?.fixture;
+
+  return (
+    <section className="panel-card p-5">
+      <div className="flex flex-col gap-3 border-b border-white/10 pb-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.24em] text-lime-300">Match Center</p>
+          <h2 className="mt-2 font-display text-3xl font-bold">Sportmonks fixture detail</h2>
+          <p className="mt-2 text-sm leading-6 text-slate-400">
+            {matchCenter?.available ? "Live fixture detail feed connected." : matchCenter?.message || "Loading fixture detail..."}
+          </p>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-300">
+          {matchCenter?.lastUpdated ? new Date(matchCenter.lastUpdated).toLocaleString() : "Awaiting data"}
+        </span>
+      </div>
+
+      {fixture ? (
+        <div className="mt-5 space-y-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_320px]">
+            <article className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+              <div className="flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.2em] text-slate-400">
+                <span>{fixture.league}</span>
+                {fixture.country ? <span className="text-slate-600">•</span> : null}
+                {fixture.country ? <span>{fixture.country}</span> : null}
+                <span className="text-slate-600">•</span>
+                <span>{fixture.kickoff}</span>
+                <span className="text-slate-600">•</span>
+                <span>{fixture.state}</span>
+              </div>
+              <div className="mt-4 flex items-center justify-between gap-4 rounded-[24px] border border-white/10 bg-slate-950/55 px-4 py-4">
+                <TeamIdentity name={fixture.homeTeam} logo={fixture.homeLogo} align="left" />
+                <span className="rounded-full border border-lime-300/20 bg-lime-300/10 px-4 py-2 font-display text-2xl font-bold text-lime-300">
+                  {fixture.score ? `${fixture.score.home} - ${fixture.score.away}` : "vs"}
+                </span>
+                <TeamIdentity name={fixture.awayTeam} logo={fixture.awayLogo} align="right" />
+              </div>
+              <div className="mt-4 grid gap-3 text-sm text-slate-300 sm:grid-cols-2 xl:grid-cols-4">
+                <InfoPill label="Venue" value={fixture.venue} />
+                <InfoPill label="City" value={fixture.city || "TBC"} />
+                <InfoPill label="Referee" value={fixture.referee || "Unassigned"} />
+                <InfoPill label="Attendance" value={fixture.attendance || "Not posted"} />
+              </div>
+            </article>
+
+            <article className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+              <p className="text-xs uppercase tracking-[0.24em] text-lime-300">Match tags</p>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {(fixture.metadata?.length ? fixture.metadata : ["No metadata available"]).map((item) => (
+                  <span key={item} className="rounded-full border border-white/10 bg-white/5 px-3 py-2 text-xs uppercase tracking-[0.18em] text-slate-300">
+                    {item}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-6 text-xs uppercase tracking-[0.24em] text-lime-300">Coaches</p>
+              <div className="mt-4 space-y-3">
+                {(fixture.coaches?.length ? fixture.coaches : [{ name: "No coach data", nationality: null, team: null }]).map((coach) => (
+                  <div key={`${coach.team || "team"}-${coach.name}`} className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
+                    <p className="font-medium text-white">{coach.name}</p>
+                    <p className="mt-1 text-sm text-slate-400">{[coach.team, coach.nationality].filter(Boolean).join(" · ") || "Coach profile unavailable"}</p>
+                  </div>
+                ))}
+              </div>
+            </article>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <LineupCard title={`${fixture.homeTeam} lineup`} players={fixture.homeLineup} />
+            <LineupCard title={`${fixture.awayTeam} lineup`} players={fixture.awayLineup} />
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 rounded-[24px] border border-dashed border-white/12 bg-white/[0.03] p-8 text-center text-slate-400">
+          {matchCenter?.message || "Fixture details are not available right now."}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function InfoPill({ label, value }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3">
+      <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{label}</p>
+      <p className="mt-2 font-medium text-white">{value}</p>
+    </div>
+  );
+}
+
+function LineupCard({ title, players }) {
+  const list = players?.length ? players : [{ player: "Lineup not posted", position: "Pending" }];
+
+  return (
+    <article className="rounded-[24px] border border-white/10 bg-white/[0.04] p-5">
+      <p className="text-xs uppercase tracking-[0.24em] text-lime-300">Starting XI</p>
+      <h3 className="mt-2 font-display text-2xl font-bold">{title}</h3>
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        {list.map((entry) => (
+          <div key={`${entry.player}-${entry.position}`} className="rounded-2xl border border-white/10 bg-slate-950/50 px-4 py-3">
+            <p className="font-medium text-white">{entry.player}</p>
+            <p className="mt-1 text-sm text-slate-400">{entry.position}</p>
+          </div>
+        ))}
+      </div>
+    </article>
   );
 }
 
@@ -687,6 +800,47 @@ function Field({ label, type = "text", value, onChange }) {
   );
 }
 
+function TeamIdentity({ name, logo, align = "left", compact = false }) {
+  return (
+    <div className={["flex min-w-0 items-center gap-3", align === "right" ? "flex-row-reverse text-right" : "text-left"].join(" ")}>
+      <TeamLogo logo={logo} name={name} compact={compact} />
+      <div className="min-w-0">
+        <p className={["truncate font-display font-bold text-white", compact ? "text-lg" : "text-xl"].join(" ")}>{name}</p>
+      </div>
+    </div>
+  );
+}
+
+function TeamLogo({ logo, name, compact = false }) {
+  const [imageFailed, setImageFailed] = useState(false);
+  const initials = name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0])
+    .join("")
+    .toUpperCase();
+  const sizeClass = compact ? "h-10 w-10" : "h-12 w-12";
+
+  if (!logo || imageFailed) {
+    return (
+      <div className={["grid shrink-0 place-items-center rounded-2xl border border-white/10 bg-white/5 font-display text-sm font-bold text-lime-300", sizeClass].join(" ")}>
+        {initials || "TM"}
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={logo}
+      alt={name}
+      loading="lazy"
+      onError={() => setImageFailed(true)}
+      className={["shrink-0 rounded-2xl border border-white/10 bg-white/95 object-contain p-1", sizeClass].join(" ")}
+    />
+  );
+}
+
 function SummaryRow({ label, value }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3">
@@ -697,6 +851,10 @@ function SummaryRow({ label, value }) {
 }
 
 export default App;
+
+
+
+
 
 
 

@@ -2,8 +2,22 @@ const sportsDbApiKey = process.env.SPORTSDB_API_KEY || "123";
 const sportsDbBaseUrl = `https://www.thesportsdb.com/api/v1/json/${sportsDbApiKey}`;
 const sportmonksToken = process.env.SPORTMONKS_API_TOKEN;
 const sportmonksBaseUrl = "https://api.sportmonks.com/v3/football";
-const scheduledSports = ["Soccer", "Basketball"];
+const sportmonksRoundId = process.env.SPORTMONKS_ROUND_ID || "372147";
+const sportmonksFixtureId = process.env.SPORTMONKS_FIXTURE_ID || "19427175";
+const scheduledSports = ["Basketball"];
 const scheduledDayOffsets = [0, 1, 2, 3, 4, 5, 6];
+
+function toCollection(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (Array.isArray(value?.data)) {
+    return value.data;
+  }
+
+  return [];
+}
 
 function buildFixtureOdds(homeTeam, awayTeam, market = "Match Winner") {
   const seed = homeTeam.length + awayTeam.length;
@@ -57,7 +71,7 @@ function formatRelativeDate(dateEvent) {
 
 function formatKickoff(dateEvent, time) {
   if (!dateEvent) {
-    return "Live now";
+    return "TBD";
   }
 
   const relativeDay = formatRelativeDate(dateEvent);
@@ -66,33 +80,95 @@ function formatKickoff(dateEvent, time) {
   return [relativeDay, normalizedTime].filter(Boolean).join(", ");
 }
 
+function parseEventDateTime(datePart, timePart) {
+  if (!datePart) {
+    return null;
+  }
+
+  const normalizedTime = (timePart || "00:00:00").slice(0, 8);
+  const isoCandidate = `${datePart}T${normalizedTime}`;
+  const parsed = new Date(isoCandidate);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function isUpcomingDate(datePart, timePart) {
+  const eventDate = parseEventDateTime(datePart, timePart);
+  if (!eventDate) {
+    return false;
+  }
+
+  return eventDate.getTime() > Date.now();
+}
+
 function normalizeScheduledEvent(event, statusLabel) {
   const homeTeam = event.strHomeTeam || "Home";
   const awayTeam = event.strAwayTeam || "Away";
-  const sport = event.strSport || "Football";
-  const league = event.strLeague || sport || "Match";
+  const sport = event.strSport || "Basketball";
   const market = sport === "Basketball" ? "Spread" : "Match Winner";
 
   return {
     id: event.idEvent || `${homeTeam}-${awayTeam}-${event.dateEvent || statusLabel}`,
-    league,
+    sourceId: String(event.idEvent || `${homeTeam}-${awayTeam}`),
+    league: event.strLeague || sport || "Match",
     sport,
     kickoff: formatKickoff(event.dateEvent, event.strTime),
     sortDate: [event.dateEvent || "9999-12-31", event.strTime || "23:59:59"].join("T"),
     match: `${homeTeam} vs ${awayTeam}`,
     homeTeam,
     awayTeam,
+    homeLogo: null,
+    awayLogo: null,
     liveScore: null,
     market,
     odds: buildFixtureOdds(homeTeam, awayTeam, market),
     trend: event.strStatus ? `Status: ${event.strStatus}` : `${statusLabel} market moving`,
-    boost: statusLabel === "Live" ? "Live Odds" : "Scheduled Odds",
-    status: event.strStatus || statusLabel
+    boost: "Upcoming Odds",
+    status: "Upcoming"
   };
 }
 
-function extractCurrentScore(scores = []) {
-  const currentScores = scores.filter((score) => score.description === "CURRENT");
+function extractOdds(odds, homeTeam, awayTeam) {
+  const oddsList = toCollection(odds);
+  if (oddsList.length === 0) {
+    return buildFixtureOdds(homeTeam, awayTeam, "Match Winner");
+  }
+
+  const selections = {};
+
+  for (const odd of oddsList) {
+    const label = odd.label || odd.name || odd.value_name;
+    const value = odd.value ?? odd.dp3 ?? odd.odds;
+    if (!label || value == null) {
+      continue;
+    }
+
+    let mappedLabel = label;
+    if (label === "1") {
+      mappedLabel = "Home";
+    } else if (label === "X") {
+      mappedLabel = "Draw";
+    } else if (label === "2") {
+      mappedLabel = "Away";
+    }
+
+    selections[mappedLabel] = Number(value);
+  }
+
+  return Object.keys(selections).length > 0
+    ? selections
+    : buildFixtureOdds(homeTeam, awayTeam, "Match Winner");
+}
+
+function getFixtureParticipants(fixture) {
+  return toCollection(fixture.participants);
+}
+
+function getParticipantLogo(participant) {
+  return participant?.image_path || participant?.image || participant?.logo_path || null;
+}
+
+function extractCurrentScore(scores) {
+  const currentScores = toCollection(scores).filter((score) => score.description === "CURRENT");
   if (currentScores.length === 0) {
     return null;
   }
@@ -106,32 +182,88 @@ function extractCurrentScore(scores = []) {
   };
 }
 
-function normalizeSportmonksFixture(fixture) {
-  const participants = fixture.participants || [];
+function normalizeSportmonksRoundFixture(fixture, leagueName) {
+  const participants = getFixtureParticipants(fixture);
   const home = participants.find((participant) => participant.meta?.location === "home") || participants[0];
   const away = participants.find((participant) => participant.meta?.location === "away") || participants[1];
   const homeTeam = home?.name || fixture.name?.split(" vs ")[0] || "Home";
   const awayTeam = away?.name || fixture.name?.split(" vs ")[1] || "Away";
-  const league = fixture.league?.name || "Football";
-  const startingAt = fixture.starting_at || "";
-  const [datePart, timePart] = startingAt.split(" ");
-  const stateName = fixture.state?.name || fixture.state?.short_name || "Live";
+  const [datePart, timePart] = (fixture.starting_at || "").split(" ");
 
   return {
     id: String(fixture.id),
-    league,
+    sourceId: String(fixture.id),
+    league: leagueName || fixture.league?.name || "Football",
     sport: "Football",
     kickoff: formatKickoff(datePart, timePart),
     sortDate: [datePart || "9999-12-31", timePart || "23:59:59"].join("T"),
     match: `${homeTeam} vs ${awayTeam}`,
     homeTeam,
     awayTeam,
-    liveScore: extractCurrentScore(fixture.scores),
+    homeLogo: getParticipantLogo(home),
+    awayLogo: getParticipantLogo(away),
+    liveScore: null,
     market: "Match Winner",
-    odds: buildFixtureOdds(homeTeam, awayTeam, "Match Winner"),
-    trend: fixture.result_info || `Status: ${stateName}`,
-    boost: "Live Odds",
-    status: stateName
+    odds: extractOdds(fixture.odds, homeTeam, awayTeam),
+    trend: "Upcoming odds loaded from Sportmonks",
+    boost: "Upcoming Odds",
+    status: "Upcoming"
+  };
+}
+
+function normalizeLineup(lineups, side) {
+  return toCollection(lineups)
+    .filter((entry) => entry.team?.meta?.location === side || entry.participant?.meta?.location === side)
+    .map((entry) => ({
+      player: entry.player?.display_name || entry.player?.name || "Unnamed player",
+      position: entry.details?.position || entry.type?.name || entry.details?.type?.name || "Role"
+    }))
+    .slice(0, 11);
+}
+
+function normalizeCoaches(coaches) {
+  return toCollection(coaches).map((coach) => ({
+    name: coach.name || coach.fullname || "Coach",
+    nationality: coach.nationality || coach.country?.name || null,
+    team: coach.team?.name || coach.participant?.name || null
+  }));
+}
+
+function normalizeMetadata(metadata) {
+  return toCollection(metadata)
+    .map((item) => item.type?.name || item.type?.code || item.value || item.description)
+    .filter(Boolean)
+    .slice(0, 6);
+}
+
+function normalizeFixtureDetails(fixture) {
+  const participants = getFixtureParticipants(fixture);
+  const home = participants.find((participant) => participant.meta?.location === "home") || participants[0];
+  const away = participants.find((participant) => participant.meta?.location === "away") || participants[1];
+  const homeTeam = home?.name || fixture.name?.split(" vs ")[0] || "Home";
+  const awayTeam = away?.name || fixture.name?.split(" vs ")[1] || "Away";
+  const [datePart, timePart] = (fixture.starting_at || "").split(" ");
+  const score = extractCurrentScore(fixture.scores);
+
+  return {
+    id: String(fixture.id),
+    league: fixture.league?.name || "Football",
+    country: fixture.league?.country?.name || null,
+    venue: fixture.venue?.name || "Venue TBC",
+    city: fixture.venue?.city_name || null,
+    kickoff: formatKickoff(datePart, timePart),
+    state: fixture.state?.name || fixture.state?.short_name || "Scheduled",
+    referee: fixture.referee?.name || null,
+    attendance: fixture.attendance || null,
+    homeTeam,
+    awayTeam,
+    homeLogo: getParticipantLogo(home),
+    awayLogo: getParticipantLogo(away),
+    score,
+    homeLineup: normalizeLineup(fixture.lineups, "home"),
+    awayLineup: normalizeLineup(fixture.lineups, "away"),
+    coaches: normalizeCoaches(fixture.coaches),
+    metadata: normalizeMetadata(fixture.metadata)
   };
 }
 
@@ -150,23 +282,32 @@ async function fetchSportsDb(endpoint) {
   return response.json();
 }
 
-async function fetchSportmonksInplay() {
+async function fetchSportmonksRoundFixtures() {
   if (!sportmonksToken) {
     return [];
   }
 
-  const url = new URL(`${sportmonksBaseUrl}/livescores/inplay`);
+  const url = new URL(`${sportmonksBaseUrl}/rounds/${sportmonksRoundId}`);
   url.searchParams.set("api_token", sportmonksToken);
-  url.searchParams.set("include", "participants;league;state;scores");
+  url.searchParams.set("include", "fixtures.odds.market;fixtures.odds.bookmaker;fixtures.participants;league.country");
+  url.searchParams.set("filters", "markets:1;bookmakers:2");
 
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`Sportmonks request failed with ${response.status}`);
+    throw new Error(`Sportmonks round request failed with ${response.status}`);
   }
 
   const payload = await response.json();
-  const fixtures = Array.isArray(payload.data) ? payload.data : payload.data ? [payload.data] : [];
-  return fixtures.map(normalizeSportmonksFixture);
+  const round = payload.data || {};
+  const leagueName = round.league?.name;
+  const fixtures = toCollection(round.fixtures);
+
+  return fixtures
+    .filter((fixture) => {
+      const [datePart, timePart] = (fixture.starting_at || "").split(" ");
+      return isUpcomingDate(datePart, timePart);
+    })
+    .map((fixture) => normalizeSportmonksRoundFixture(fixture, leagueName));
 }
 
 async function fetchScheduledEvents() {
@@ -184,21 +325,30 @@ async function fetchScheduledEvents() {
 
   return events
     .filter((event) => event.strHomeTeam && event.strAwayTeam)
-    .map((event) => normalizeScheduledEvent(event, "Scheduled"));
+    .filter((event) => isUpcomingDate(event.dateEvent, event.strTime))
+    .map((event) => normalizeScheduledEvent(event, "Upcoming"));
+}
+
+function mergeFixtures(primaryFixtures, additionalFixtures) {
+  const merged = [...primaryFixtures];
+
+  for (const fixture of additionalFixtures) {
+    const existing = merged.find((entry) => entry.sourceId === fixture.sourceId || entry.id === fixture.id);
+    if (!existing) {
+      merged.push(fixture);
+      continue;
+    }
+
+    if (fixture.odds && Object.keys(fixture.odds).length > 0) {
+      existing.odds = fixture.odds;
+    }
+  }
+
+  return merged;
 }
 
 function sortFixtures(fixtures) {
-  return fixtures.sort((left, right) => {
-    if (left.boost === "Live Odds" && right.boost !== "Live Odds") {
-      return -1;
-    }
-
-    if (left.boost !== "Live Odds" && right.boost === "Live Odds") {
-      return 1;
-    }
-
-    return left.sortDate.localeCompare(right.sortDate);
-  });
+  return fixtures.sort((left, right) => left.sortDate.localeCompare(right.sortDate));
 }
 
 function stripSortDate(fixtures) {
@@ -207,25 +357,19 @@ function stripSortDate(fixtures) {
 
 export async function getLiveFixtures() {
   try {
-    const [footballInplay, scheduledEvents] = await Promise.all([
-      fetchSportmonksInplay(),
+    const [footballRoundFixtures, scheduledEvents] = await Promise.all([
+      fetchSportmonksRoundFixtures(),
       fetchScheduledEvents()
     ]);
 
-    const mergedFixtures = [...footballInplay];
-    for (const fixture of scheduledEvents) {
-      if (!mergedFixtures.some((entry) => entry.id === fixture.id)) {
-        mergedFixtures.push(fixture);
-      }
-    }
-
+    const mergedFixtures = mergeFixtures(footballRoundFixtures, scheduledEvents);
     const fixtures = stripSortDate(sortFixtures(mergedFixtures)).slice(0, 20);
 
     if (fixtures.length > 0) {
       return {
-        source: footballInplay.length > 0 ? "Sportmonks In-Play + Schedule" : "Schedule",
+        source: "Sportmonks Round Odds + Upcoming Schedule",
         fixtures,
-        live: footballInplay.length > 0
+        live: false
       };
     }
   } catch (error) {
@@ -237,4 +381,52 @@ export async function getLiveFixtures() {
     fixtures: [],
     live: false
   };
+}
+
+export async function getFeaturedFixtureDetails() {
+  if (!sportmonksToken) {
+    return {
+      available: false,
+      message: "SPORTMONKS_API_TOKEN is not configured.",
+      fixture: null
+    };
+  }
+
+  try {
+    const url = new URL(`${sportmonksBaseUrl}/fixtures/${sportmonksFixtureId}`);
+    url.searchParams.set("api_token", sportmonksToken);
+    url.searchParams.set(
+      "include",
+      "participants;league;venue;state;scores;lineups.player;lineups.type;lineups.details.type;metadata.type;coaches"
+    );
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Sportmonks fixture request failed with ${response.status}`);
+    }
+
+    const payload = await response.json();
+    const fixture = payload.data;
+
+    if (!fixture) {
+      return {
+        available: false,
+        message: "Fixture details unavailable.",
+        fixture: null
+      };
+    }
+
+    return {
+      available: true,
+      message: null,
+      fixture: normalizeFixtureDetails(fixture)
+    };
+  } catch (error) {
+    console.error("Fixture detail feed failed", error.message);
+    return {
+      available: false,
+      message: "Fixture details unavailable.",
+      fixture: null
+    };
+  }
 }

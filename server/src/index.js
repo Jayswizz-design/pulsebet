@@ -11,7 +11,7 @@ import {
 } from "./data.js";
 import { requireAuth } from "./auth.js";
 import { connectToDatabase } from "./db.js";
-import { getLiveFixtures } from "./live-service.js";
+import { getFeaturedFixtureDetails, getLiveFixtures } from "./live-service.js";
 import { getUserById, loginUser, registerUser } from "./user-store.js";
 
 const app = express();
@@ -45,6 +45,14 @@ app.get("/api/live-center", async (_req, res) => {
     fixtures: liveData.fixtures,
     source: liveData.source,
     live: liveData.live,
+    lastUpdated: new Date().toISOString()
+  });
+});
+
+app.get("/api/match-center", async (_req, res) => {
+  const details = await getFeaturedFixtureDetails();
+  res.json({
+    ...details,
     lastUpdated: new Date().toISOString()
   });
 });
@@ -227,4 +235,5 @@ connectToDatabase()
     databaseReady = false;
     console.error("MongoDB unavailable, continuing with public feed routes only:", error.message);
   });
+
 
