@@ -99,7 +99,7 @@ export const virtualGames = [
     description: "Fast-cycle football fixtures with instant settlement and live-style odds.",
     cadence: "Every 3 minutes",
     category: "Football",
-    jackpot: "$18,000"
+    jackpot: 18000000
   },
   {
     id: "virtual-racing",
@@ -107,7 +107,7 @@ export const virtualGames = [
     description: "Broadcast-style horse racing cards with boosted exotic markets.",
     cadence: "Every 5 minutes",
     category: "Racing",
-    jackpot: "$9,500"
+    jackpot: 9500000
   },
   {
     id: "virtual-basketball",
@@ -115,6 +115,6 @@ export const virtualGames = [
     description: "Quick basketball simulations built for in-play style picks and totals.",
     cadence: "Every 4 minutes",
     category: "Basketball",
-    jackpot: "$12,300"
+    jackpot: 12300000
   }
 ];
