@@ -1,6 +1,7 @@
 node_modules/
 client/dist/
 .env
+server/.env
 server/data/users.json
 *.log
 .vercel

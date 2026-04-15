@@ -1,6 +1,6 @@
 # PulseBet
 
-[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Jayswizz-design/pulsebet)`r`n`r`nPulseBet is a React + Node.js sports betting interface with:
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy?repo=https://github.com/Jayswizz-design/pulsebet )`r`n`r`nPulseBet is a React + Node.js sports betting interface with:
 - Tailwind CSS frontend
 - React Router pages for sportsbook, login, register, and virtual games
 - MongoDB persistence with Mongoose
@@ -84,9 +84,7 @@ A production default is also provided in [client/.env.production](./client/.env.
 
 Deploy flow:
 
-```bash
-overcel
-```
+```bash`r`nvercel`r`n```
 
 If using the dashboard instead of CLI:
 - Import the repo

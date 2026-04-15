@@ -9,9 +9,10 @@ import {
   stats,
   virtualGames
 } from "./data.js";
-import { requireAuth } from "./auth.js";
+import { requireAuth, verifyAuthToken } from "./auth.js";
 import { connectToDatabase } from "./db.js";
 import { getFeaturedFixtureDetails, getLiveFixtures } from "./live-service.js";
+import { Bet } from "./models/Bet.js";
 import { getUserById, loginUser, registerUser } from "./user-store.js";
 
 const app = express();
@@ -33,6 +34,29 @@ function ensureDatabase(res) {
     message: "Database is not available yet. Public sportsbook feeds still work."
   });
   return false;
+}
+function getBetBonusRate(betType, picksCount) {
+  if (betType !== "multiple") {
+    return 0;
+  }
+
+  if (picksCount >= 10) {
+    return 15;
+  }
+
+  if (picksCount >= 7) {
+    return 10;
+  }
+
+  if (picksCount >= 5) {
+    return 5;
+  }
+
+  if (picksCount >= 3) {
+    return 2;
+  }
+
+  return 0;
 }
 
 app.get("/api/health", (_req, res) => {
@@ -211,6 +235,101 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
   }
 });
 
+
+app.post("/api/bets/place", async (req, res) => {
+  if (!ensureDatabase(res)) {
+    return;
+  }
+
+  const { picks, stake, betType } = req.body || {};
+  const normalizedPicks = Array.isArray(picks) ? picks : [];
+  const normalizedStake = Math.max(100, Number(stake) || 0);
+  const normalizedBetType = betType === "single" ? "single" : "multiple";
+
+  if (!normalizedPicks.length) {
+    res.status(400).json({ message: "Add at least one selection before placing a bet." });
+    return;
+  }
+
+  if (normalizedStake < 100) {
+    res.status(400).json({ message: "Minimum stake is NGN 100." });
+    return;
+  }
+
+  const normalizedPickPayload = normalizedPicks.map((pick) => ({
+    id: String(pick.id || ""),
+    match: String(pick.match || "Unknown Match"),
+    market: String(pick.market || "Unknown Market"),
+    league: String(pick.league || "Unknown League"),
+    sport: String(pick.sport || "Unknown Sport"),
+    kickoff: String(pick.kickoff || "TBD"),
+    label: String(pick.label || "Selection"),
+    price: Number(pick.price) || 1
+  }));
+
+    const multipleOdds = normalizedPickPayload.reduce((total, pick) => total * pick.price, 1);
+  const totalOdds = normalizedBetType === "multiple"
+    ? multipleOdds
+    : normalizedPickPayload.reduce((sum, pick) => sum + pick.price, 0);
+  const totalStake = normalizedBetType === "multiple"
+    ? normalizedStake
+    : normalizedStake * normalizedPickPayload.length;
+  const potentialReturn = normalizedBetType === "multiple"
+    ? multipleOdds * normalizedStake
+    : normalizedPickPayload.reduce((sum, pick) => sum + (pick.price * normalizedStake), 0);
+  const bonusRate = getBetBonusRate(normalizedBetType, normalizedPickPayload.length);
+  const bonusAmount = potentialReturn * (bonusRate / 100);
+  const totalPayout = potentialReturn + bonusAmount;
+
+  let userId = null;
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    try {
+      const auth = verifyAuthToken(authHeader.slice(7));
+      userId = auth?.sub || null;
+    } catch (_error) {
+      userId = null;
+    }
+  }
+
+  try {
+    const ticket = await Bet.create({
+      ticketId: `PB-${Date.now()}`,
+      userId,
+      picks: normalizedPickPayload,
+      picksCount: normalizedPickPayload.length,
+      betType: normalizedBetType,
+      stake: normalizedStake,
+      totalStake,
+      totalOdds: Number(totalOdds.toFixed(2)),
+      potentialReturn: Number(potentialReturn.toFixed(2)),
+      bonusRate,
+      bonusAmount: Number(bonusAmount.toFixed(2)),
+      totalPayout: Number(totalPayout.toFixed(2))
+    });
+
+    res.status(201).json({
+      message: "Bet placed successfully.",
+      ticket: {
+        id: ticket._id.toString(),
+        ticketId: ticket.ticketId,
+        picksCount: ticket.picksCount,
+        betType: ticket.betType,
+        stake: ticket.stake,
+        totalStake: ticket.totalStake,
+        totalOdds: ticket.totalOdds,
+        potentialReturn: ticket.potentialReturn,
+        bonusRate: ticket.bonusRate,
+        bonusAmount: ticket.bonusAmount,
+        totalPayout: ticket.totalPayout,
+        createdAt: ticket.createdAt
+      }
+    });
+  } catch (_error) {
+    res.status(500).json({ message: "Unable to place bet right now." });
+  }
+});
+
 app.use(express.static(clientDistPath));
 
 app.get("*", (req, res, next) => {
@@ -235,5 +354,12 @@ connectToDatabase()
     databaseReady = false;
     console.error("MongoDB unavailable, continuing with public feed routes only:", error.message);
   });
+
+
+
+
+
+
+
 
 
