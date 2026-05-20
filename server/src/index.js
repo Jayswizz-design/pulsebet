@@ -73,6 +73,59 @@ app.get("/api/live-center", async (_req, res) => {
   });
 });
 
+function isLiveFixture(fixture) {
+  if (fixture?.liveScore) {
+    return true;
+  }
+
+  const status = String(fixture?.status || "");
+  return /live|in[- ]play|1st|2nd|3rd|4th|ht|half|q[1-4]|minute/i.test(status);
+}
+
+app.get("/api/live-window", async (req, res) => {
+  const minutes = Math.min(180, Math.max(15, Number(req.query.minutes) || 60));
+  const liveData = await getLiveFixtures();
+  const now = Date.now();
+  const maxTime = now + minutes * 60 * 1000;
+
+  const fixtures = (Array.isArray(liveData.fixtures) ? liveData.fixtures : []).filter((fixture) => {
+    if (isLiveFixture(fixture)) {
+      return true;
+    }
+
+    if (!fixture?.startsAt) {
+      return false;
+    }
+
+    const startsAtMs = Date.parse(fixture.startsAt);
+    if (Number.isNaN(startsAtMs)) {
+      return false;
+    }
+
+    return startsAtMs >= now && startsAtMs <= maxTime;
+  });
+
+  res.json({
+    source: liveData.source,
+    minutes,
+    fixtures,
+    live: liveData.live,
+    lastUpdated: new Date().toISOString()
+  });
+});
+
+app.get("/api/live-now", async (_req, res) => {
+  const liveData = await getLiveFixtures();
+  const fixtures = (Array.isArray(liveData.fixtures) ? liveData.fixtures : []).filter((fixture) => isLiveFixture(fixture));
+
+  res.json({
+    source: liveData.source,
+    fixtures,
+    live: liveData.live,
+    lastUpdated: new Date().toISOString()
+  });
+});
+
 app.get("/api/match-center", async (_req, res) => {
   const details = await getFeaturedFixtureDetails();
   res.json({
@@ -194,8 +247,9 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
       return;
     }
 
-    if (!amount) {
-      res.status(400).json({ message: "Amount is required." });
+    const normalizedAmount = Number(amount);
+    if (!Number.isFinite(normalizedAmount) || normalizedAmount < 100) {
+      res.status(400).json({ message: "Minimum deposit is NGN 100." });
       return;
     }
 
@@ -207,7 +261,7 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
       },
       body: JSON.stringify({
         email: user.email,
-        amount: Math.round(Number(amount) * 100),
+        amount: Math.round(normalizedAmount * 100),
         callback_url: process.env.PAYSTACK_CALLBACK_URL || "http://localhost:5173/",
         metadata: {
           source: "PulseBet deposit",
@@ -232,6 +286,54 @@ app.post("/api/payments/paystack/initialize", requireAuth, async (req, res) => {
     });
   } catch (_error) {
     res.status(502).json({ message: "Unable to reach Paystack right now." });
+  }
+});
+
+app.get("/api/payments/paystack/verify/:reference", requireAuth, async (req, res) => {
+  if (!ensureDatabase(res)) {
+    return;
+  }
+
+  const paystackSecret = process.env.PAYSTACK_SECRET_KEY;
+  const reference = String(req.params.reference || "").trim();
+
+  if (!paystackSecret) {
+    res.status(503).json({
+      message: "PAYSTACK_SECRET_KEY is not configured on the server."
+    });
+    return;
+  }
+
+  if (!reference) {
+    res.status(400).json({ message: "Payment reference is required." });
+    return;
+  }
+
+  try {
+    const response = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: {
+        Authorization: `Bearer ${paystackSecret}`
+      }
+    });
+    const payload = await response.json();
+
+    if (!response.ok || !payload.status) {
+      res.status(502).json({ message: payload.message || "Unable to verify transaction." });
+      return;
+    }
+
+    const data = payload.data || {};
+    res.json({
+      status: data.status,
+      reference: data.reference,
+      amount: typeof data.amount === "number" ? data.amount / 100 : null,
+      paidAt: data.paid_at || null,
+      channel: data.channel || null,
+      currency: data.currency || "NGN",
+      message: data.status === "success" ? "Deposit successful." : `Deposit status: ${data.status || "pending"}`
+    });
+  } catch (_error) {
+    res.status(502).json({ message: "Unable to verify Paystack transaction right now." });
   }
 });
 

@@ -1,5 +1,9 @@
 const sportsDbApiKey = process.env.SPORTSDB_API_KEY || "123";
 const sportsDbBaseUrl = `https://www.thesportsdb.com/api/v1/json/${sportsDbApiKey}`;
+const sportsDbExtraSoccerLeagueIds = (process.env.SPORTSDB_EXTRA_SOCCER_LEAGUES || "4328,4335,4332,4331,4334,4346,4337,4338,4344,4350,4339,4340,4480")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
 const sportmonksToken = process.env.SPORTMONKS_API_TOKEN;
 const sportmonksBaseUrl = "https://api.sportmonks.com/v3/football";
 const sportmonksRoundId = process.env.SPORTMONKS_ROUND_ID || "372147";
@@ -8,7 +12,7 @@ const sportmonksTopLeagues = (process.env.SPORTMONKS_TOP_LEAGUES || "Premier Lea
   .split(",")
   .map((league) => league.trim().toLowerCase())
   .filter(Boolean);
-const scheduledSports = ["Soccer", "Basketball", "Tennis", "Handball", "Ice Hockey", "eSports", "MMA"];
+const scheduledSports = ["Soccer", "Basketball", "Baseball", "Tennis", "Handball", "Ice Hockey", "eSports", "MMA"];
 const scheduledDayOffsets = [0, 1, 2, 3, 4, 5, 6];
 const sportradarApiKey = process.env.SPORTRADAR_API_KEY;
 const sportradarTennisBaseUrl = process.env.SPORTRADAR_TENNIS_BASE_URL || "https://api.sportradar.com/tennis/production/v3";
@@ -94,6 +98,22 @@ const randomHockeyLeagues = [
   "KHL",
   "IIHF Championship"
 ];
+const randomBaseballTeams = [
+  "New York Yankees",
+  "Los Angeles Dodgers",
+  "Atlanta Braves",
+  "Houston Astros",
+  "Philadelphia Phillies",
+  "Chicago Cubs",
+  "Boston Red Sox",
+  "San Diego Padres"
+];
+const randomBaseballLeagues = [
+  "MLB",
+  "NPB",
+  "KBO League",
+  "Mexican League"
+];
 const randomMmaFighters = [
   "Israel Adesanya",
   "Alex Pereira",
@@ -112,25 +132,77 @@ const randomMmaLeagues = [
   "Bellator MMA",
   "PFL Main Event"
 ];
-const randomFootballTeams = [
-  "Arsenal",
-  "Chelsea",
-  "Liverpool",
-  "Manchester City",
-  "Real Madrid",
-  "Barcelona",
-  "Bayern Munich",
-  "Inter Milan",
-  "PSG",
-  "Atletico Madrid"
+const randomFootballLeaguePools = {
+  "Premier League": [
+    "Arsenal",
+    "Chelsea",
+    "Liverpool",
+    "Manchester City",
+    "Manchester United",
+    "Tottenham Hotspur",
+    "Newcastle United",
+    "Aston Villa"
+  ],
+  "La Liga": [
+    "Real Madrid",
+    "Barcelona",
+    "Atletico Madrid",
+    "Sevilla",
+    "Real Sociedad",
+    "Athletic Club"
+  ],
+  "Serie A": [
+    "Inter Milan",
+    "AC Milan",
+    "Juventus",
+    "Napoli",
+    "Roma",
+    "Lazio"
+  ],
+  "UEFA Champions League": [
+    "Real Madrid",
+    "Barcelona",
+    "Bayern Munich",
+    "Paris Saint-Germain",
+    "Manchester City",
+    "Arsenal",
+    "Inter Milan",
+    "Atletico Madrid"
+  ]
+};
+const basketballApiKey = process.env.BASKETBALL_API_KEY;
+const basketballApiHost = process.env.BASKETBALL_API_HOST || "v1.basketball.api-sports.io";
+const basketballSeason = process.env.BASKETBALL_SEASON || String(new Date().getUTCFullYear());
+const basketballLeagues = (process.env.BASKETBALL_LEAGUES || "12")
+  .split(",")
+  .map((entry) => entry.trim())
+  .filter(Boolean);
+const randomBasketballTeams = [
+  "Boston Celtics",
+  "Los Angeles Lakers",
+  "Golden State Warriors",
+  "Milwaukee Bucks",
+  "Denver Nuggets",
+  "Miami Heat",
+  "Phoenix Suns",
+  "Dallas Mavericks"
 ];
-const randomFootballLeagues = [
-  "Premier League",
-  "La Liga",
-  "Bundesliga",
-  "Serie A",
-  "Ligue 1"
+const randomBasketballLeagues = [
+  "NBA",
+  "EuroLeague",
+  "NBL",
+  "Liga ACB"
 ];
+const randomBasketballTeamLogos = {
+  "Boston Celtics": "https://upload.wikimedia.org/wikipedia/en/8/8f/Boston_Celtics.svg",
+  "Los Angeles Lakers": "https://upload.wikimedia.org/wikipedia/commons/3/3c/Los_Angeles_Lakers_logo.svg",
+  "Golden State Warriors": "https://upload.wikimedia.org/wikipedia/en/0/01/Golden_State_Warriors_logo.svg",
+  "Milwaukee Bucks": "https://upload.wikimedia.org/wikipedia/en/4/4a/Milwaukee_Bucks_logo.svg",
+  "Denver Nuggets": "https://upload.wikimedia.org/wikipedia/en/7/76/Denver_Nuggets.svg",
+  "Miami Heat": "https://upload.wikimedia.org/wikipedia/en/f/fb/Miami_Heat_logo.svg",
+  "Phoenix Suns": "https://upload.wikimedia.org/wikipedia/en/d/dc/Phoenix_Suns_logo.svg",
+  "Dallas Mavericks": "https://upload.wikimedia.org/wikipedia/en/9/97/Dallas_Mavericks_logo.svg"
+};
 
 function toCollection(value) {
   if (Array.isArray(value)) {
@@ -148,9 +220,12 @@ function buildFixtureOdds(homeTeam, awayTeam, market = "Match Winner") {
   const seed = homeTeam.length + awayTeam.length;
 
   if (market === "Spread") {
+    const spread = ((seed % 6) + 2.5).toFixed(1);
+    const homePrice = (1.78 + (seed % 8) * 0.04).toFixed(2);
+    const awayPrice = (1.82 + ((seed + 3) % 8) * 0.04).toFixed(2);
     return {
-      [`${homeTeam.slice(0, 3).toUpperCase()} -3.5`]: 1.91,
-      [`${awayTeam.slice(0, 3).toUpperCase()} +3.5`]: 1.91
+      [`${homeTeam.slice(0, 3).toUpperCase()} -${spread}`]: Number(homePrice),
+      [`${awayTeam.slice(0, 3).toUpperCase()} +${spread}`]: Number(awayPrice)
     };
   }
 
@@ -236,12 +311,18 @@ function normalizeScheduledEvent(event, statusLabel) {
   const rawSport = event.strSport || "Basketball";
   const normalizedSportMap = {
     soccer: "Football",
+    baseball: "Baseball",
     "ice hockey": "Ice Hockey",
     esports: "eSports",
     "e-sports": "eSports"
   };
   const sport = normalizedSportMap[rawSport.toLowerCase()] || rawSport;
   const market = sport === "Basketball" ? "Spread" : "Match Winner";
+
+  const homeScore = Number(event?.intHomeScore);
+  const awayScore = Number(event?.intAwayScore);
+  const hasLiveScore = Number.isFinite(homeScore) && Number.isFinite(awayScore);
+  const derivedStatus = String(event?.strStatus || statusLabel || "Upcoming");
 
   return {
     id: event.idEvent || `${homeTeam}-${awayTeam}-${event.dateEvent || statusLabel}`,
@@ -255,12 +336,13 @@ function normalizeScheduledEvent(event, statusLabel) {
     awayTeam,
     homeLogo: null,
     awayLogo: null,
-    liveScore: null,
+    liveScore: hasLiveScore ? { home: homeScore, away: awayScore } : null,
     market,
     odds: buildFixtureOdds(homeTeam, awayTeam, market),
+    extraMarkets: [],
     trend: event.strStatus ? `Status: ${event.strStatus}` : `${statusLabel} market moving`,
     boost: "Upcoming Odds",
-    status: "Upcoming"
+    status: derivedStatus
   };
 }
 
@@ -343,10 +425,56 @@ function normalizeSportmonksFixture(fixture, options = {}) {
     liveScore: null,
     market: "Match Winner",
     odds: extractOdds(fixture.odds, homeTeam, awayTeam),
+    extraMarkets: extractExtraMarkets(fixture.odds),
     trend: options.trend || `${leagueName} market loaded from Sportmonks`,
     boost: options.boost || "Upcoming Odds",
     status: options.status || fixture.state?.name || fixture.state?.short_name || "Upcoming"
   };
+}
+
+function pushUniqueMarket(collection, label, price) {
+  const normalizedLabel = String(label || "").trim();
+  const parsedPrice = Number(price);
+  if (!normalizedLabel || !Number.isFinite(parsedPrice) || parsedPrice <= 1) {
+    return;
+  }
+  if (collection.some((entry) => entry.label === normalizedLabel)) {
+    return;
+  }
+  collection.push({ label: normalizedLabel, price: Number(parsedPrice.toFixed(2)) });
+}
+
+function extractExtraMarkets(odds) {
+  const oddsList = toCollection(odds);
+  const markets = [];
+
+  for (const odd of oddsList) {
+    const baseLabel = String(odd?.label || odd?.name || odd?.value_name || "").trim();
+    const marketName = String(odd?.market?.name || odd?.market_name || "").toLowerCase();
+    const rawPrice = odd?.value ?? odd?.dp3 ?? odd?.odd ?? odd?.odds;
+    const labelLower = baseLabel.toLowerCase();
+
+    if (!baseLabel || rawPrice == null) {
+      continue;
+    }
+
+    if (marketName.includes("double chance")) {
+      pushUniqueMarket(markets, `Double Chance ${baseLabel.toUpperCase()}`, rawPrice);
+      continue;
+    }
+
+    if (marketName.includes("over") || marketName.includes("under") || labelLower.startsWith("over") || labelLower.startsWith("under")) {
+      pushUniqueMarket(markets, baseLabel, rawPrice);
+      continue;
+    }
+
+    if (marketName.includes("both teams to score") || labelLower === "yes" || labelLower === "no") {
+      const mapped = labelLower === "yes" ? "BTTS Yes" : labelLower === "no" ? "BTTS No" : baseLabel;
+      pushUniqueMarket(markets, mapped, rawPrice);
+    }
+  }
+
+  return markets.slice(0, 8);
 }
 
 function normalizeLineup(lineups, side) {
@@ -354,7 +482,8 @@ function normalizeLineup(lineups, side) {
     .filter((entry) => entry.team?.meta?.location === side || entry.participant?.meta?.location === side)
     .map((entry) => ({
       player: entry.player?.display_name || entry.player?.name || "Unnamed player",
-      position: entry.details?.position || entry.type?.name || entry.details?.type?.name || "Role"
+      position: entry.details?.position || entry.type?.name || entry.details?.type?.name || "Role",
+      image: entry.player?.image_path || entry.player?.image || entry.player?.photo || null
     }))
     .slice(0, 11);
 }
@@ -645,6 +774,38 @@ async function fetchScheduledEvents() {
     .map((event) => normalizeScheduledEvent(event, "Upcoming"));
 }
 
+async function fetchSportsDbLiveEvents() {
+  const liveSports = ["Soccer", "Basketball", "Baseball", "Tennis", "Ice Hockey"];
+  const requests = liveSports.map((sport) => fetchSportsDb(`livescore.php?s=${encodeURIComponent(sport)}`));
+  const settledResponses = await Promise.allSettled(requests);
+  const responses = settledResponses
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+
+  const events = responses.flatMap((payload) => payload.events || []);
+  return events
+    .filter((event) => event.strHomeTeam && event.strAwayTeam)
+    .map((event) => normalizeScheduledEvent(event, "Live"));
+}
+
+async function fetchSportsDbExtraLeagueEvents() {
+  const requests = sportsDbExtraSoccerLeagueIds.map((leagueId) =>
+    fetchSportsDb(`eventsnextleague.php?id=${leagueId}`)
+  );
+
+  const settledResponses = await Promise.allSettled(requests);
+  const responses = settledResponses
+    .filter((result) => result.status === "fulfilled")
+    .map((result) => result.value);
+
+  const events = responses.flatMap((payload) => payload.events || []);
+
+  return events
+    .filter((event) => event.strHomeTeam && event.strAwayTeam)
+    .filter((event) => isUpcomingDate(event.dateEvent, event.strTime))
+    .map((event) => normalizeScheduledEvent(event, "Upcoming"));
+}
+
 function pickRandom(array) {
   return array[Math.floor(Math.random() * array.length)];
 }
@@ -697,6 +858,60 @@ function generateRandomTennisFixtures(count = 8) {
   return fixtures;
 }
 
+function generateRandomFootballFixtures(count = 8) {
+  const fixtures = [];
+  const usedMatches = new Set();
+  const leagues = Object.keys(randomFootballLeaguePools);
+
+  for (let index = 0; index < count; index += 1) {
+    const league = leagues[index % leagues.length];
+    const teams = randomFootballLeaguePools[league] || [];
+    if (teams.length < 2) {
+      continue;
+    }
+
+    let homeTeam = pickRandom(teams);
+    let awayTeam = pickRandom(teams);
+    while (homeTeam === awayTeam) {
+      awayTeam = pickRandom(teams);
+    }
+
+    const pairKey = `${league}::${[homeTeam, awayTeam].sort().join("::")}`;
+    if (usedMatches.has(pairKey)) {
+      continue;
+    }
+    usedMatches.add(pairKey);
+
+    const offset = index % 7;
+    const datePart = getIsoDate(offset);
+    const hour = String(16 + (index % 6)).padStart(2, "0");
+    const minute = index % 2 === 0 ? "00" : "30";
+    const timePart = `${hour}:${minute}:00`;
+
+    fixtures.push({
+      id: `rnd-football-${league.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${datePart}-${index}`,
+      sourceId: `rnd-football-${league.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${datePart}-${index}`,
+      league,
+      sport: "Football",
+      kickoff: formatKickoff(datePart, timePart),
+      sortDate: `${datePart}T${timePart}`,
+      match: `${homeTeam} vs ${awayTeam}`,
+      homeTeam,
+      awayTeam,
+      homeLogo: null,
+      awayLogo: null,
+      liveScore: null,
+      market: "Match Winner",
+      odds: buildFixtureOdds(homeTeam, awayTeam, "Match Winner"),
+      trend: `${league} random market stream`,
+      boost: league === "UEFA Champions League" ? "UCL Odds" : "Upcoming Odds",
+      status: "Upcoming"
+    });
+  }
+
+  return fixtures;
+}
+
 function generateRandomTeamFixtures({ sport, teams, leagues, boost, count = 6 }) {
   const usedMatches = new Set();
   const fixtures = [];
@@ -732,8 +947,8 @@ function generateRandomTeamFixtures({ sport, teams, leagues, boost, count = 6 })
       match: `${homeTeam} vs ${awayTeam}`,
       homeTeam,
       awayTeam,
-      homeLogo: null,
-      awayLogo: null,
+      homeLogo: sport === "Basketball" ? randomBasketballTeamLogos[homeTeam] || null : null,
+      awayLogo: sport === "Basketball" ? randomBasketballTeamLogos[awayTeam] || null : null,
       liveScore: null,
       market,
       odds: buildFixtureOdds(homeTeam, awayTeam, market),
@@ -821,36 +1036,228 @@ function sortFixtures(fixtures) {
 }
 
 function stripSortDate(fixtures) {
-  return fixtures.map(({ sortDate, ...fixture }) => fixture);
+  return fixtures.map(({ sortDate, ...fixture }) => {
+    const hasValidSortDate = typeof sortDate === "string" && !sortDate.startsWith("9999-12-31");
+    return {
+      ...fixture,
+      startsAt: hasValidSortDate ? new Date(sortDate).toISOString() : null
+    };
+  });
+}
+
+async function fetchBasketballApi(pathname, searchParams = {}) {
+  const url = new URL(`https://${basketballApiHost}${pathname}`);
+  Object.entries(searchParams).forEach(([key, value]) => {
+    if (value != null && value !== "") {
+      url.searchParams.set(key, String(value));
+    }
+  });
+
+  const response = await fetch(url, {
+    headers: {
+      "x-rapidapi-key": basketballApiKey,
+      "x-rapidapi-host": basketballApiHost
+    }
+  });
+
+  if (!response.ok) {
+    throw new Error(`Basketball API request failed with ${response.status}`);
+  }
+
+  return response.json();
+}
+
+function normalizeBasketballGame(game, oddsByGame = new Map()) {
+  const homeTeam = game?.teams?.home?.name || "Home";
+  const awayTeam = game?.teams?.away?.name || "Away";
+  const statusLong = game?.status?.long || game?.status?.short || "Scheduled";
+  const [datePart, timePart] = toDateTimeParts(game?.date).sortDate.split("T");
+  const gameId = String(game?.id || `${homeTeam}-${awayTeam}-${datePart}`);
+  const linkedOdds = oddsByGame.get(gameId);
+
+  return {
+    id: `basketball-${gameId}`,
+    sourceId: `basketball-${gameId}`,
+    league: game?.league?.name || "Basketball",
+    sport: "Basketball",
+    kickoff: formatKickoff(datePart, timePart),
+    sortDate: `${datePart || "9999-12-31"}T${timePart || "23:59:59"}`,
+    match: `${homeTeam} vs ${awayTeam}`,
+    homeTeam,
+    awayTeam,
+    homeLogo: game?.teams?.home?.logo || null,
+    awayLogo: game?.teams?.away?.logo || null,
+    liveScore: game?.scores?.home?.total != null && game?.scores?.away?.total != null
+      ? { home: Number(game.scores.home.total), away: Number(game.scores.away.total) }
+      : null,
+    market: "Moneyline",
+    odds: linkedOdds || buildTwoWayOdds(homeTeam, awayTeam),
+    extraMarkets: Array.isArray(linkedOdds?.extraMarkets) ? linkedOdds.extraMarkets : [],
+    trend: `Status: ${statusLong}`,
+    boost: linkedOdds ? "Basketball Odds" : "Basketball Schedule",
+    status: statusLong
+  };
+}
+
+function normalizeOddLabel(value) {
+  const label = String(value || "").trim().toLowerCase();
+  if (!label) {
+    return "";
+  }
+
+  if (["home", "1", "h"].includes(label)) {
+    return "Home";
+  }
+  if (["away", "2", "a"].includes(label)) {
+    return "Away";
+  }
+  return "";
+}
+
+function extractBasketballMoneylineOdds(item) {
+  const bookmakers = toCollection(item?.bookmakers);
+  const extraMarkets = [];
+  for (const bookmaker of bookmakers) {
+    const bets = toCollection(bookmaker?.bets);
+    for (const bet of bets) {
+      const betName = String(bet?.name || bet?.label || "").toLowerCase();
+      const looksLikeMoneyline = betName.includes("winner")
+        || betName.includes("moneyline")
+        || betName.includes("match result");
+
+      const values = toCollection(bet?.values);
+      if (betName.includes("over") || betName.includes("under") || betName.includes("total")) {
+        for (const selection of values) {
+          const price = Number(selection?.odd);
+          const label = String(selection?.value || "").trim();
+          if (label && Number.isFinite(price) && price > 1) {
+            pushUniqueMarket(extraMarkets, label, price);
+          }
+        }
+      }
+
+      if (!looksLikeMoneyline) {
+        continue;
+      }
+
+      let homeOdd = null;
+      let awayOdd = null;
+      for (const selection of values) {
+        const side = normalizeOddLabel(selection?.value);
+        const odd = Number(selection?.odd);
+        if (!Number.isFinite(odd) || odd <= 1) {
+          continue;
+        }
+        if (side === "Home") {
+          homeOdd = odd;
+        } else if (side === "Away") {
+          awayOdd = odd;
+        }
+      }
+
+      if (homeOdd && awayOdd) {
+        return { Home: homeOdd, Away: awayOdd, extraMarkets: extraMarkets.slice(0, 8) };
+      }
+    }
+  }
+
+  return extraMarkets.length ? { Home: null, Away: null, extraMarkets: extraMarkets.slice(0, 8) } : null;
+}
+
+async function fetchBasketballFixtures() {
+  if (!basketballApiKey) {
+    return [];
+  }
+
+  try {
+    const dayRequests = [];
+    const oddsRequests = [];
+
+    for (const offset of scheduledDayOffsets) {
+      const date = getIsoDate(offset);
+
+      for (const league of basketballLeagues) {
+        dayRequests.push(
+          fetchBasketballApi("/games", { date, season: basketballSeason, league })
+        );
+        oddsRequests.push(
+          fetchBasketballApi("/odds", { date, season: basketballSeason, league })
+        );
+      }
+    }
+
+    const [gamesSettled, oddsSettled] = await Promise.all([
+      Promise.allSettled(dayRequests),
+      Promise.allSettled(oddsRequests)
+    ]);
+
+    const games = gamesSettled
+      .filter((entry) => entry.status === "fulfilled")
+      .flatMap((entry) => toCollection(entry.value?.response));
+    const oddsItems = oddsSettled
+      .filter((entry) => entry.status === "fulfilled")
+      .flatMap((entry) => toCollection(entry.value?.response));
+
+    const oddsByGame = new Map();
+    for (const item of oddsItems) {
+      const gameId = String(item?.game?.id || item?.id || "");
+      const extractedOdds = extractBasketballMoneylineOdds(item);
+      if (!gameId || !extractedOdds) {
+        continue;
+      }
+
+      if (Number.isFinite(extractedOdds.Home) && Number.isFinite(extractedOdds.Away)) {
+        oddsByGame.set(gameId, extractedOdds);
+      } else if (Array.isArray(extractedOdds.extraMarkets) && extractedOdds.extraMarkets.length > 0) {
+        const existing = oddsByGame.get(gameId) || {};
+        oddsByGame.set(gameId, {
+          ...existing,
+          extraMarkets: extractedOdds.extraMarkets
+        });
+      }
+    }
+
+    return games
+      .map((game) => normalizeBasketballGame(game, oddsByGame))
+      .filter((fixture) => {
+        const [datePart, timePart] = fixture.sortDate.split("T");
+        return isUpcomingDate(datePart, timePart) || Boolean(fixture.liveScore);
+      });
+  } catch (error) {
+    console.error("Basketball API feed failed", error.message);
+    return [];
+  }
 }
 
 export async function getLiveFixtures() {
   try {
-    const [topLeagueFixtures, footballRoundFixtures, sportradarTennisFixtures, scheduledEvents] = await Promise.all([
+    const [topLeagueFixtures, footballRoundFixtures, sportradarTennisFixtures, basketballFixtures, liveEvents, scheduledEvents, extraLeagueEvents] = await Promise.all([
       fetchSportmonksTopLeagueFixtures(),
       fetchSportmonksRoundFixtures(),
       fetchSportradarTennisFixtures(),
-      fetchScheduledEvents()
+      fetchBasketballFixtures(),
+      fetchSportsDbLiveEvents(),
+      fetchScheduledEvents(),
+      fetchSportsDbExtraLeagueEvents()
     ]);
 
     let mergedFixtures = mergeFixtures(topLeagueFixtures, footballRoundFixtures);
     mergedFixtures = mergeFixtures(mergedFixtures, sportradarTennisFixtures);
+    mergedFixtures = mergeFixtures(mergedFixtures, basketballFixtures);
+    mergedFixtures = mergeFixtures(mergedFixtures, liveEvents);
     mergedFixtures = mergeFixtures(mergedFixtures, scheduledEvents);
+    mergedFixtures = mergeFixtures(mergedFixtures, extraLeagueEvents);
 
     const footballFixturesCount = countFixturesBySport(mergedFixtures, "Football");
     const tennisFixturesCount = countFixturesBySport(mergedFixtures, "Tennis");
     const esportsFixturesCount = countFixturesBySport(mergedFixtures, "eSports");
     const handballFixturesCount = countFixturesBySport(mergedFixtures, "Handball");
     const hockeyFixturesCount = countFixturesBySport(mergedFixtures, "Ice Hockey");
+    const baseballFixturesCount = countFixturesBySport(mergedFixtures, "Baseball");
     const mmaFixturesCount = countFixturesBySport(mergedFixtures, "MMA");
+    const basketballFixturesCount = countFixturesBySport(mergedFixtures, "Basketball");
 
-    const randomFootballFixtures = footballFixturesCount < 8 ? generateRandomTeamFixtures({
-      sport: "Football",
-      teams: randomFootballTeams,
-      leagues: randomFootballLeagues,
-      boost: "Upcoming Odds",
-      count: 8 - footballFixturesCount
-    }) : [];
+    const randomFootballFixtures = footballFixturesCount < 8 ? generateRandomFootballFixtures(8 - footballFixturesCount) : [];
     const randomTennisFixtures = tennisFixturesCount < 6 ? generateRandomTennisFixtures(6 - tennisFixturesCount) : [];
     const randomEsportsFixtures = esportsFixturesCount < 6 ? generateRandomTeamFixtures({
       sport: "eSports",
@@ -873,6 +1280,20 @@ export async function getLiveFixtures() {
       boost: "Upcoming Odds",
       count: 6 - hockeyFixturesCount
     }) : [];
+    const randomBaseballFixtures = baseballFixturesCount < 6 ? generateRandomTeamFixtures({
+      sport: "Baseball",
+      teams: randomBaseballTeams,
+      leagues: randomBaseballLeagues,
+      boost: "Upcoming Odds",
+      count: 6 - baseballFixturesCount
+    }) : [];
+    const randomBasketballFixtures = basketballFixturesCount < 7 ? generateRandomTeamFixtures({
+      sport: "Basketball",
+      teams: randomBasketballTeams,
+      leagues: randomBasketballLeagues,
+      boost: "Upcoming Odds",
+      count: 7 - basketballFixturesCount
+    }) : [];
     const randomMmaFixtures = mmaFixturesCount < 6 ? generateRandomMmaFixtures(6 - mmaFixturesCount) : [];
 
     mergedFixtures = mergeFixtures(mergedFixtures, randomFootballFixtures);
@@ -880,6 +1301,8 @@ export async function getLiveFixtures() {
     mergedFixtures = mergeFixtures(mergedFixtures, randomEsportsFixtures);
     mergedFixtures = mergeFixtures(mergedFixtures, randomHandballFixtures);
     mergedFixtures = mergeFixtures(mergedFixtures, randomHockeyFixtures);
+    mergedFixtures = mergeFixtures(mergedFixtures, randomBaseballFixtures);
+    mergedFixtures = mergeFixtures(mergedFixtures, randomBasketballFixtures);
     mergedFixtures = mergeFixtures(mergedFixtures, randomMmaFixtures);
 
     const fixtures = stripSortDate(sortFixtures(mergedFixtures)).slice(0, 84);
